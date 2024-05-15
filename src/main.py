@@ -334,9 +334,9 @@ class VisualCipher:
                     for share_index in range(n):
                         S_share = S[share_index].reshape(scale, scale)
                         # Replace 1 in S_share with covers[share_index][i, j, z] 
-                        # Replace 0 in S_share with covers[share_index + 1][i, j, z] - 1
+                        # Replace 0 in S_share with covers[share_index][i, j, z] - 1
                         S_share[S_share == 1] = covers[share_index][i, j, z]
-                        S_share[S_share == 0] = [share_index + 1][i, j, z] - 1
+                        S_share[S_share == 0] = covers[share_index][i, j, z] - 1
 
                         # Put S_share into camouflages
                         camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z] = S_share
@@ -347,6 +347,71 @@ class VisualCipher:
 
         return camouflages, rs
 
+    def reconstruct_S_mn(self, r, Camouflages, scale, i, j, z, m, n):
+        
+        S = np.zeros((n, m), dtype=np.uint8)
+
+        
+        # replace the larger value in S with 1 and the smaller value with 0 in each row
+        for share_index in range(n):
+            patch = Camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z]
+            S_share = patch.copy().flatten()
+            one_value = max(S_share)
+            S_share[S_share == one_value] = 1
+            S_share[S_share != 1] = 0
+            S[share_index] = S_share
+
+        #print(S)
+
+        return S
+
+    def recover_pixel_mn(self, S, r, m, n):
+        # r must between 1 and m
+        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
+
+        T = np.sum(S, axis=0) % 2
+
+
+        k = 0
+        for j in range(m):
+            if j == r-1:
+                continue
+            elif j < r-1:
+                # t_i = k_i
+                k += T[j] * (2 ** (7-j))
+                #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j))
+            elif j > r-1:
+                # t_i = k_i-1
+                k += T[j-1] * (2 ** (7-j+1))
+                #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
+        return k
+    
+    def decrypt_mn(self, camouflages, rs, m, n):
+        scale = int(m ** 0.5)
+        h, w, c = camouflages[0].shape
+        
+        # Initialize container for the decrypted secret image
+        secret = np.zeros((h // scale, w // scale, c), dtype=np.uint8)
+
+        pbar = tqdm(total=(h // scale) * (w // scale) * c, desc="Decrypting")
+
+        for z in range(c):
+            for i in range(h // scale):
+                for j in range(w // scale):
+                    r = rs[i, j]
+                    #S = np.zeros((n, m), dtype=np.uint8)
+                    S = self.reconstruct_S_mn(r, camouflages, scale, i, j, z, m, n)
+
+                    
+                    # Recover original pixel value
+                    k = self.recover_pixel_mn(S, r, m, n)
+                    secret[i, j, z] = k
+                    pbar.update(1)
+
+        pbar.close()
+
+        return secret
+    
 if __name__ == "__main__":
     vc = VisualCipher()
     secret = vc.lena
@@ -374,3 +439,11 @@ if __name__ == "__main__":
     # save
     for i in range(n):
         cv2.imwrite(f"camouflage{i}.png", camouflages[i])
+
+    cv2.imwrite("rs.png", vc.r2img(rs))  
+    
+    rs = vc.img2r(cv2.imread("rs.png", cv2.IMREAD_GRAYSCALE))
+
+    secret_recovered = vc.decrypt_mn(camouflages, rs, m, n)
+    # save
+    cv2.imwrite("secret_recovered_test_mn.png", secret_recovered)
