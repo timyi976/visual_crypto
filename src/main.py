@@ -323,7 +323,7 @@ class VisualCipher:
         for _ in range(n):
             camouflages.append(np.zeros((h * scale, w * scale, c), dtype=np.uint8))
 
-        pbar = tqdm(total=h * w * c)
+        pbar = tqdm(total=h * w * c,  desc="Encrypting")
 
         for z in range(c):
             for i in range(h):
@@ -373,7 +373,7 @@ class VisualCipher:
 
 
         k = 0
-        for j in range(m):
+        for j in range(8):
             if j == r-1:
                 continue
             elif j < r-1:
@@ -382,7 +382,7 @@ class VisualCipher:
                 #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j))
             elif j > r-1:
                 # t_i = k_i-1
-                k += T[j-1] * (2 ** (7-j+1))
+                k += T[j+1] * (2 ** (7-j+1))
                 #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
         return k
     
