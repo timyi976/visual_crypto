@@ -33,7 +33,7 @@ class VisualCipher:
         for j in range(m):
             if j == r-1:
                 S[0, j] = 1
-                S[1, j] = np.random.randint(0, 2)
+                S[1, j] = 0
                 continue
             elif j < r-1:
                 S[0, j] = assigns[j]
@@ -43,6 +43,62 @@ class VisualCipher:
                 S[1, j] = S[0, j] ^ k_bits[j-1]
         return S
     
+    def reconstruct_S_29(self, r, patch0, patch1):
+        m, n = 9,2
+        
+        S = np.zeros((n, m), dtype=np.uint8)
+
+        # replace the larger value in S with 1 and the smaller value with 0 in each row
+        S0 = patch0.copy().flatten()
+        one_value = S0[r-1]
+        S0[S0 == one_value] = 1
+        S0[S0 != 1] = 0
+
+        S1 = patch1.copy().flatten()
+        zero_value = S1[r-1]
+        S1[S1 == zero_value] = 0
+        S1[S1 != 0] = 1
+
+        S[0] = S0
+        S[1] = S1
+
+        return S
+
+    def recover_pixel_29(self, S, r):
+        m, n = 9, 2
+        # r must between 1 and m
+        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
+
+        k = 0
+        for j in range(m):
+            if j == r-1:
+                continue
+            elif j < r-1:
+                k += (S[0,j] ^ S[1,j]) * (2 ** (7-j))
+            elif j > r-1:
+                k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
+        return k
+    
+    def r2img(self, rs):
+        values = np.unique(rs)
+        # split 255 into len(values) parts
+        split = 255 // len(values)
+        rs_img = np.zeros(rs.shape, dtype=np.uint8)
+        for i, value in enumerate(values):
+            rs_img[rs == value] = split * i
+
+        return rs_img
+    
+    def img2r(self, rs_img):
+        values = np.unique(rs_img)
+        # split 255 into len(values) parts
+        split = 255 // len(values)
+        rs = np.zeros(rs_img.shape, dtype=np.uint8)
+        for i, value in enumerate(values):
+            rs[rs_img == value] = i + 1
+
+        return rs
+
     def encrypt_29(self, secret, covers):
         m, n = 9, 2
         h, w, c = secret.shape
@@ -68,7 +124,7 @@ class VisualCipher:
         for _ in range(n):
             camouflages.append(np.zeros((h * scale, w * scale, c), dtype=np.uint8))
 
-        pbar = tqdm(total=h*w*c)
+        pbar = tqdm(total=h*w*c, desc="Encrypting")
 
         for z in range(c):
             for i in range(h):
@@ -76,6 +132,12 @@ class VisualCipher:
                     r = rs[i, j]
                     k = secret[i, j, z]
                     S = self.construct_S_29(k, r)
+
+                    # if (i,j) in [(10, 10), (11, 20), (100, 209)]:
+                    #     print(i, j)
+                    #     print(r)
+                    #     print(k)
+                    #     print(S)
                     
                     S0 = S[0].reshape(scale, scale)
                     S1 = S[1].reshape(scale, scale)
@@ -101,7 +163,31 @@ class VisualCipher:
         m, n = 9, 2
         scale = int(m ** 0.5)
         h, w, c = camouflages[0].shape
-    
+
+        secret = np.zeros((h//scale, w//scale, c), dtype=np.uint8)
+
+        pbar = tqdm(total=(h//scale)*(w//scale)*c, desc="Decrypting")
+
+        for z in range(c):
+            for i in range(h//scale):
+                for j in range(w//scale):
+                    r = rs[i, j]
+                    S = self.reconstruct_S_29(r, camouflages[0][i*scale:(i+1)*scale, j*scale:(j+1)*scale, z], camouflages[1][i*scale:(i+1)*scale, j*scale:(j+1)*scale, z])
+                    k = self.recover_pixel_29(S, r)
+
+                    # if (i,j) in [(10, 10), (11, 20), (100, 209)]:
+                    #     print(i, j)
+                    #     print(r)
+                    #     print(k)
+                    #     print(S)
+
+                    secret[i, j, z] = k
+                    pbar.update(1)
+
+        pbar.close()
+
+        return secret
+
 if __name__ == "__main__":
     vc = VisualCipher()
     secret = vc.lena
@@ -111,4 +197,11 @@ if __name__ == "__main__":
 
     # save
     cv2.imwrite("camouflage0.png", camouflages[0])
-    cv2.imwrite("camouflage1.png", camouflages[1])            
+    cv2.imwrite("camouflage1.png", camouflages[1])        
+    cv2.imwrite("rs.png", vc.r2img(rs))  
+
+    rs = vc.img2r(cv2.imread("rs.png", cv2.IMREAD_GRAYSCALE))
+    secret_recovered = vc.decrypt_29(camouflages, rs)
+
+    # save
+    cv2.imwrite("secret_recovered.png", secret_recovered)
