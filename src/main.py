@@ -16,6 +16,12 @@ class VisualCipher:
         self.mandril = cv2.imread(STDIMAGES + "color/mandril_color.tif", cv2.IMREAD_COLOR)
         self.peppers = cv2.imread(STDIMAGES + "color/peppers_color.tif", cv2.IMREAD_COLOR)
 
+        # for m * n scheme
+        self.cameraman = cv2.imread(STDIMAGES + "gray/cameraman.tif", cv2.IMREAD_COLOR)
+        self.house = cv2.imread(STDIMAGES + "gray/house.tif", cv2.IMREAD_COLOR)
+        self.jetplane = cv2.imread(STDIMAGES + "gray/jetplane.tif", cv2.IMREAD_COLOR)
+        self.lake = cv2.imread(STDIMAGES + "gray/lake.tif", cv2.IMREAD_COLOR)
+
     def construct_S_29(self, k, r):
         m, n = 9,2
         # r must between 1 and m
@@ -188,6 +194,158 @@ class VisualCipher:
 
         return secret
 
+    def construct_S_2_out_of_2(self, k, r, need_unpack_bits=True):
+        m, n = 9,2
+        # r must between 1 and m
+        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
+
+        S = np.zeros((n, m), dtype=np.uint8)
+        noOfOnes = 0
+        
+        # convert k into bits
+        if (need_unpack_bits):
+            k_bits = np.unpackbits(np.array([k], dtype=np.uint8))
+        else:
+            k_bits = k
+
+
+
+        for i in range(m):
+
+            if i < r-1 and k_bits[i] == 1:
+                noOfOnes += 1
+                #S[0, i] = assigns[i]
+                if noOfOnes % 2 == 0:
+                    S[1, i] = 0
+                else:
+                    S[1, i] = 1
+            elif i >= r-1 and k_bits[i] == 1:
+                #S[0, i] = assigns[i-1]
+                S[1, i] = S[0, i] ^ k_bits[i-1]
+            
+
+        if noOfOnes % 2 == 1:
+            S[1, r-1] = 0
+        
+        
+        #Randomly assign the rest null elements in row 1
+        #to 0 or 1, let the total number of 1s be more than the
+        #number of 0s by one.
+        S_row1 = S[0]
+
+        assigns = [0] * (m//2) + [1] * (m//2)
+        if len(assigns) < m:
+            assigns.append(1)
+        np.random.shuffle(assigns)
+        for i in range (m):
+            S[0, i] = assigns[i]
+        
+
+        
+        j = -1
+        for i in range(m):
+            if i != r-1:
+                j += 1
+                S[1,i] = S[0,i] ^ k_bits[j]
+            else:
+                if(noOfOnes % 2 == 1):
+                    S[1,i] = 1
+                else:
+                    S[1,i] = S[0,i] ^ 0
+        return S
+
+    def construct_S_mn(self, k, r, m, n):
+        # r must be between 1 and m
+        assert 1 <= r <= m, "r must satisfy 1 <= r <= m"
+        
+        S = np.zeros((n, m), dtype=np.uint8)
+
+        # Convert k into bits
+        k_bits = np.unpackbits(np.array([k], dtype=np.uint8))
+
+        # Random assign n-2 rows with five 1s and four 0s
+        
+        # Randomly choose 2 non_assign rows
+        choose_none_assign_row = np.random.choice(n, 2, replace=False)
+        
+        for i in range(n):
+            if i in choose_none_assign_row:
+                continue
+            # Randomly choose 5 indices to place 1s
+            ones_indices = np.random.choice(m, 5, replace=False)
+            S[i, ones_indices] = 1
+
+        # Compute t
+        t = np.zeros(m, dtype=np.uint8)
+
+        for i in range(m):
+            if i < r - 1:
+                t[i] = k_bits[i]
+            elif i == r - 1:
+                t[i] = np.random.randint(0, 2)
+            else:
+                t[i] = k_bits[i - 1]
+
+        # Compute t0
+        t0 = np.bitwise_xor(t, np.sum(S, axis=0) % 2)
+
+        # Apply the uniform 2 out of 2 scheme to compute row S_none_assign1 and S_none_assign2
+        two_out_of_two = self.construct_S_2_out_of_2(t0,r,need_unpack_bits=False)
+
+
+        # check t equal S_1 xor S_2 xor S_3
+        S[choose_none_assign_row[0]] = two_out_of_two[0]
+        S[choose_none_assign_row[1]] = two_out_of_two[1]
+
+        return S
+    
+    def encrypt_mn(self, secret, covers, m, n):
+        h, w, c = secret.shape
+        scale = int(m ** 0.5)
+
+        # Length of covers must be n
+        assert len(covers) == n, "Length of covers must be n"
+        # All cover images must share the same shape
+        for cover in covers:
+            assert cover.shape == secret.shape, "All cover images must share the same shape"
+
+        # Add 1 to all cover images
+        for cover in covers:
+            cover += 1
+            # If exceeding 255, set to 255
+            cover[cover > 255] = 255
+
+        # Generate random numbers in shape of (h, w)
+        rs = np.random.randint(1, m + 1, (h, w))
+
+        # Camouflages
+        camouflages = []
+        for _ in range(n):
+            camouflages.append(np.zeros((h * scale, w * scale, c), dtype=np.uint8))
+
+        pbar = tqdm(total=h * w * c)
+
+        for z in range(c):
+            for i in range(h):
+                for j in range(w):
+                    r = rs[i, j]
+                    k = secret[i, j, z]
+                    S = self.construct_S_mn(k, r, m, n)
+                    for share_index in range(n):
+                        S_share = S[share_index].reshape(scale, scale)
+                        # Replace 1 in S_share with covers[share_index][i, j, z] and replace 0 in S_share with covers[share_index + 1][i, j, z] - 1
+                        S_share[S_share == 1] = covers[share_index][i, j, z]
+                        S_share[S_share == 0] = covers[(share_index + 1) % n][i, j, z] - 1
+
+                        # Put S_share into camouflages
+                        camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z] = S_share
+
+                        pbar.update(1)
+
+        pbar.close()
+
+        return camouflages, rs
+
 if __name__ == "__main__":
     vc = VisualCipher()
     secret = vc.lena
@@ -205,3 +363,13 @@ if __name__ == "__main__":
 
     # save
     cv2.imwrite("secret_recovered.png", secret_recovered)
+
+    secret = vc.cameraman
+    covers = [vc.house, vc.jetplane, vc.lake]
+    m = 9
+    n = 3
+    camouflages, rs = vc.encrypt_mn(secret, covers, m, n)
+
+    # save
+    for i in range(n):
+        cv2.imwrite(f"camouflage{i}.png", camouflages[i])
