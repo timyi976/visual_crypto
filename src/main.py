@@ -333,9 +333,10 @@ class VisualCipher:
                     S = self.construct_S_mn(k, r, m, n)
                     for share_index in range(n):
                         S_share = S[share_index].reshape(scale, scale)
-                        # Replace 1 in S_share with covers[share_index][i, j, z] and replace 0 in S_share with covers[share_index + 1][i, j, z] - 1
+                        # Replace 1 in S_share with covers[share_index][i, j, z] 
+                        # Replace 0 in S_share with covers[share_index + 1][i, j, z] - 1
                         S_share[S_share == 1] = covers[share_index][i, j, z]
-                        S_share[S_share == 0] = covers[(share_index + 1) % n][i, j, z] - 1
+                        S_share[S_share == 0] = [share_index + 1][i, j, z] - 1
 
                         # Put S_share into camouflages
                         camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z] = S_share
