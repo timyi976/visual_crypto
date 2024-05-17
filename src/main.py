@@ -17,6 +17,7 @@ class VisualCipher:
         self.peppers = cv2.imread(STDIMAGES + "color/peppers_color.tif", cv2.IMREAD_COLOR)
 
         # for m * n scheme
+        self.airplaneF16 = cv2.imread(STDIMAGES + "color/airplaneF16.tif", cv2.IMREAD_COLOR)
         self.cameraman = cv2.imread(STDIMAGES + "gray/cameraman.tif", cv2.IMREAD_COLOR)
         self.house = cv2.imread(STDIMAGES + "gray/house.tif", cv2.IMREAD_COLOR)
         self.jetplane = cv2.imread(STDIMAGES + "gray/jetplane.tif", cv2.IMREAD_COLOR)
@@ -195,63 +196,55 @@ class VisualCipher:
         return secret
 
     def construct_S_2_out_of_2(self, k, r, need_unpack_bits=True):
-        m, n = 9,2
-        # r must between 1 and m
-        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
+        m, n = 9, 2
+        assert 1 <= r <= m, "r must satisfy 1 <= r <= m"
 
-        S = np.zeros((n, m), dtype=np.uint8)
-        noOfOnes = 0
+        #S = np.zeros((n, m), dtype=np.uint8)
+        # Use 3 to represent null elements
+        S = np.full((n, m), 3, dtype=np.uint8)
         
+        noOfOnes = 0
+
         # convert k into bits
-        if (need_unpack_bits):
+        if need_unpack_bits:
             k_bits = np.unpackbits(np.array([k], dtype=np.uint8))
         else:
             k_bits = k
 
-
-
-        for i in range(m):
-
+        for i in range(m - 1):
             if i < r-1 and k_bits[i] == 1:
                 noOfOnes += 1
-                #S[0, i] = assigns[i]
                 if noOfOnes % 2 == 0:
-                    S[1, i] = 0
+                    S[0, i] = 0
                 else:
-                    S[1, i] = 1
+                    S[0, i] = 1
             elif i >= r-1 and k_bits[i] == 1:
-                #S[0, i] = assigns[i-1]
-                S[1, i] = S[0, i] ^ k_bits[i-1]
-            
+                noOfOnes += 1
+                j = i + 1
+                if noOfOnes % 2 == 1:
+                    S[0, j] = 1
+                else:
+                    S[0, j] = 0
 
         if noOfOnes % 2 == 1:
-            S[1, r-1] = 0
-        
-        
-        #Randomly assign the rest null elements in row 1
-        #to 0 or 1, let the total number of 1s be more than the
-        #number of 0s by one.
-        S_row1 = S[0]
+            S[0, r-1] = 0
 
-        assigns = [0] * (m//2) + [1] * (m//2)
-        if len(assigns) < m:
-            assigns.append(1)
-        np.random.shuffle(assigns)
-        for i in range (m):
-            S[0, i] = assigns[i]
-        
+        # Randomly assign the rest null elements in row 1
+        # (To simplify the problem, we assign 1 to the null in row 1)
+        for i in range(m):
+            if S[0,i] == 3:
+                S[0,i] = 1
 
-        
+        #Compute row 2
+
         j = -1
         for i in range(m):
             if i != r-1:
                 j += 1
                 S[1,i] = S[0,i] ^ k_bits[j]
             else:
-                if(noOfOnes % 2 == 1):
-                    S[1,i] = 1
-                else:
-                    S[1,i] = S[0,i] ^ 0
+                S[1,i] = S[0,i] ^ (noOfOnes % 2)
+                
         return S
 
     def construct_S_mn(self, k, r, m, n):
@@ -271,8 +264,8 @@ class VisualCipher:
         for i in range(n):
             if i in choose_none_assign_row:
                 continue
-            # Randomly choose 5 indices to place 1s
-            ones_indices = np.random.choice(m, 5, replace=False)
+            # Randomly choose m//2+1 indices to place 1s
+            ones_indices = np.random.choice(m, m // 2 + 1, replace=False)
             S[i, ones_indices] = 1
 
         # Compute t
@@ -290,7 +283,8 @@ class VisualCipher:
         t0 = np.bitwise_xor(t, np.sum(S, axis=0) % 2)
 
         # Apply the uniform 2 out of 2 scheme to compute row S_none_assign1 and S_none_assign2
-        two_out_of_two = self.construct_S_2_out_of_2(t0,r,need_unpack_bits=False)
+        k0 = np.delete(t0, r - 1)
+        two_out_of_two = self.construct_S_2_out_of_2(k0, r, need_unpack_bits=False)
 
 
         # check t equal S_1 xor S_2 xor S_3
@@ -373,7 +367,7 @@ class VisualCipher:
 
 
         k = 0
-        for j in range(8):
+        for j in range(m):
             if j == r-1:
                 continue
             elif j < r-1:
@@ -382,7 +376,7 @@ class VisualCipher:
                 #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j))
             elif j > r-1:
                 # t_i = k_i-1
-                k += T[j+1] * (2 ** (7-j+1))
+                k += T[j] * (2 ** (7-j+1))
                 #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
         return k
     
@@ -415,8 +409,8 @@ class VisualCipher:
 if __name__ == "__main__":
     vc = VisualCipher()
     secret = vc.lena
-    covers = [vc.mandril, vc.peppers]
-
+    covers = [vc.mandril, vc.peppers, vc.airplaneF16]
+    '''
     camouflages, rs = vc.encrypt_29(secret, covers)
 
     # save
@@ -432,6 +426,7 @@ if __name__ == "__main__":
 
     secret = vc.cameraman
     covers = [vc.house, vc.jetplane, vc.lake]
+    '''
     m = 9
     n = 3
     camouflages, rs = vc.encrypt_mn(secret, covers, m, n)
@@ -446,4 +441,4 @@ if __name__ == "__main__":
 
     secret_recovered = vc.decrypt_mn(camouflages, rs, m, n)
     # save
-    cv2.imwrite("secret_recovered_test_mn.png", secret_recovered)
+    cv2.imwrite("tt.png", secret_recovered)
