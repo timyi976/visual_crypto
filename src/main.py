@@ -441,4 +441,4 @@ if __name__ == "__main__":
 
     secret_recovered = vc.decrypt_mn(camouflages, rs, m, n)
     # save
-    cv2.imwrite("tt.png", secret_recovered)
+    cv2.imwrite("secret_recovered_mn.png", secret_recovered)
