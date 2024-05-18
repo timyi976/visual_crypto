@@ -11,82 +11,71 @@ SEED = 2024
 random.seed(SEED)
 np.random.seed(SEED)
 
-class VisualCipher:
+class StandardImages:
     def __init__(self):
-        self.lena = cv2.imread(STDIMAGES + "color/lena_color_512.tif", cv2.IMREAD_COLOR)
+        # color
+        self.lenna = cv2.imread(STDIMAGES + "color/lenna_color_512.tif", cv2.IMREAD_COLOR)
         self.mandril = cv2.imread(STDIMAGES + "color/mandril_color.tif", cv2.IMREAD_COLOR)
         self.peppers = cv2.imread(STDIMAGES + "color/peppers_color.tif", cv2.IMREAD_COLOR)
-
-        # for m * n scheme
         self.airplaneF16 = cv2.imread(STDIMAGES + "color/airplaneF16.tif", cv2.IMREAD_COLOR)
-        self.cameraman = cv2.imread(STDIMAGES + "gray/cameraman.tif", cv2.IMREAD_COLOR)
-        self.house = cv2.imread(STDIMAGES + "gray/house.tif", cv2.IMREAD_COLOR)
-        self.jetplane = cv2.imread(STDIMAGES + "gray/jetplane.tif", cv2.IMREAD_COLOR)
-        self.lake = cv2.imread(STDIMAGES + "gray/lake.tif", cv2.IMREAD_COLOR)
 
-    def construct_S_29(self, k, r):
-        m, n = 9,2
-        # r must between 1 and m
-        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
+        # gray
+        self.cameraman = cv2.imread(STDIMAGES + "gray/cameraman.tif", cv2.IMREAD_GRAYSCALE)
+        self.house = cv2.imread(STDIMAGES + "gray/house.tif", cv2.IMREAD_GRAYSCALE)
+        self.jetplane = cv2.imread(STDIMAGES + "gray/jetplane.tif", cv2.IMREAD_GRAYSCALE)
+        self.lake = cv2.imread(STDIMAGES + "gray/lake.tif", cv2.IMREAD_GRAYSCALE)
 
-        S = np.zeros((n, m), dtype=np.uint8)
-        # convert k into bits
-        k_bits = np.unpackbits(np.array([k], dtype=np.uint8))
+class Evaluator:
+    def PSNR(self, img1, img2):
+        mse = np.mean((img1 - img2) ** 2)
+        if mse == 0:
+            return 100
 
-        # randomly assign first row, with r-1-th element being 1
-        # rest of the columns have half are 1 and half are 0
-        assigns = [0] * (m//2) + [1] * (m//2)
-        np.random.shuffle(assigns)
-
-        for j in range(m):
-            if j == r-1:
-                S[0, j] = 1
-                S[1, j] = 0
-                continue
-            elif j < r-1:
-                S[0, j] = assigns[j]
-                S[1, j] = S[0, j] ^ k_bits[j]
-            elif j > r-1:
-                S[0, j] = assigns[j-1]
-                S[1, j] = S[0, j] ^ k_bits[j-1]
-        return S
+        return 10 * np.log10(255**2 / mse)
     
-    def reconstruct_S_29(self, r, patch0, patch1):
-        m, n = 9,2
-        
-        S = np.zeros((n, m), dtype=np.uint8)
+    def _expand(self, img, d):
+        h, w, c = img.shape
+        expanded = np.zeros((h * d, w * d, c), dtype=np.uint8)
 
-        # replace the larger value in S with 1 and the smaller value with 0 in each row
-        S0 = patch0.copy().flatten()
-        one_value = S0[r-1]
-        S0[S0 == one_value] = 1
-        S0[S0 != 1] = 0
-
-        S1 = patch1.copy().flatten()
-        zero_value = S1[r-1]
-        S1[S1 == zero_value] = 0
-        S1[S1 != 0] = 1
-
-        S[0] = S0
-        S[1] = S1
-
-        return S
-
-    def recover_pixel_29(self, S, r):
-        m, n = 9, 2
-        # r must between 1 and m
-        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
-
-        k = 0
-        for j in range(m):
-            if j == r-1:
-                continue
-            elif j < r-1:
-                k += (S[0,j] ^ S[1,j]) * (2 ** (7-j))
-            elif j > r-1:
-                k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
-        return k
+        for z in range(c):
+            for i in range(h):
+                for j in range(w):
+                    pixel = img[i, j, z]
+                    expanded[i*d:(i+1)*d, j*d:(j+1)*d, z] = pixel
+        return expanded
     
+    def _shrink(self, img, d, method="mean"):
+        h, w, c = img.shape
+        shrinked = np.zeros((h // d, w // d, c), dtype=np.uint8)
+
+        for z in range(c):
+            for i in range(h // d):
+                for j in range(w // d):
+                    patch = img[i*d:(i+1)*d, j*d:(j+1)*d, z]
+                    if method == "mean":
+                        pixel = np.mean(patch)
+                    elif method == "median":
+                        pixel = np.median(patch)
+                    shrinked[i, j, z] = pixel
+        return shrinked
+    
+    def ISNR(self, ori_covers, camouflages_chang, camouflages_improved, d, method="expand"):
+        n = len(ori_covers)
+        for i in range(n):
+            if method == "expand":
+                expanded = self._expand(ori_covers[i], d)
+                isnr = 10 * np.log10(np.mean((camouflages_chang[i] - expanded) ** 2) / np.mean((camouflages_improved[i] - expanded ) ** 2))
+            elif method in ["mean", "median"]:
+                shrinked_chang = self._shrink(camouflages_chang[i], d, method=method)
+                shrinked_improved = self._shrink(camouflages_improved[i], d, method=method)
+                isnr = 10 * np.log10(np.mean((shrinked_chang - ori_covers[i]) ** 2) / np.mean((shrinked_improved - ori_covers[i]) ** 2))
+
+        return isnr
+            
+class VisualCipher:
+    def __init__(self):
+        pass
+
     def r2img(self, rs):
         values = np.unique(rs)
         # split 255 into len(values) parts
@@ -107,172 +96,73 @@ class VisualCipher:
 
         return rs
 
-    def encrypt_29(self, secret, covers):
-        m, n = 9, 2
-        h, w, c = secret.shape
-        scale = int(m ** 0.5)
-
-        # length of covers must be n
-        assert len(covers) == n, "length of covers must be 2"
-        # all cover images must share same shape
-        for cover in covers:
-            assert cover.shape == secret.shape, "all cover images must share same shape"
-
-        # add 1 to all cover images
-        for cover in covers:
-            cover += 1
-            # if exceed 255, set to 255
-            cover[cover > 255] = 255
-
-        # generate random number in shape of (h, w)
-        rs = np.random.randint(1, m+1, (h, w))
-
-        # camouflages
-        camouflages = []
-        for _ in range(n):
-            camouflages.append(np.zeros((h * scale, w * scale, c), dtype=np.uint8))
-
-        pbar = tqdm(total=h*w*c, desc="Encrypting")
-
-        for z in range(c):
-            for i in range(h):
-                for j in range(w):
-                    r = rs[i, j]
-                    k = secret[i, j, z]
-                    S = self.construct_S_29(k, r)
-
-                    # if (i,j) in [(10, 10), (11, 20), (100, 209)]:
-                    #     print(i, j)
-                    #     print(r)
-                    #     print(k)
-                    #     print(S)
-                    
-                    S0 = S[0].reshape(scale, scale)
-                    S1 = S[1].reshape(scale, scale)
-
-                    # replace 1 in S0 with covers[0][i, j, z] and replace 0 in S0 with covers[1][i, j, z] - 1
-                    S0[S0 == 1] = covers[0][i, j, z]
-                    S0[S0 == 0] = covers[0][i, j, z] - 1
-                    # replace 1 in S1 with covers[1][i, j, z] and replace 0 in S1 with covers[0][i, j, z] - 1
-                    S1[S1 == 1] = covers[1][i, j, z]
-                    S1[S1 == 0] = covers[1][i, j, z] - 1
-
-                    # put S0 and S1 into camouflages
-                    camouflages[0][i*scale:(i+1)*scale, j*scale:(j+1)*scale, z] = S0
-                    camouflages[1][i*scale:(i+1)*scale, j*scale:(j+1)*scale, z] = S1
-
-                    pbar.update(1)
-
-        pbar.close()
-
-        return camouflages, rs
-    
-    def decrypt_29(self, camouflages, rs):
-        m, n = 9, 2
-        scale = int(m ** 0.5)
-        h, w, c = camouflages[0].shape
-
-        secret = np.zeros((h//scale, w//scale, c), dtype=np.uint8)
-
-        pbar = tqdm(total=(h//scale)*(w//scale)*c, desc="Decrypting")
-
-        for z in range(c):
-            for i in range(h//scale):
-                for j in range(w//scale):
-                    r = rs[i, j]
-                    S = self.reconstruct_S_29(r, camouflages[0][i*scale:(i+1)*scale, j*scale:(j+1)*scale, z], camouflages[1][i*scale:(i+1)*scale, j*scale:(j+1)*scale, z])
-                    k = self.recover_pixel_29(S, r)
-
-                    # if (i,j) in [(10, 10), (11, 20), (100, 209)]:
-                    #     print(i, j)
-                    #     print(r)
-                    #     print(k)
-                    #     print(S)
-
-                    secret[i, j, z] = k
-                    pbar.update(1)
-
-        pbar.close()
-
-        return secret
-
-    def construct_S_2_out_of_2(self, k, r, need_unpack_bits=True):
-        m, n = 9, 2
-        assert 1 <= r <= m, "r must satisfy 1 <= r <= m"
-
-        #S = np.zeros((n, m), dtype=np.uint8)
+    def construct_S_29(self, k, r, unpack=True):
         # Use 3 to represent null elements
-        S = np.full((n, m), 3, dtype=np.uint8)
+        S = np.full((2, 9), 3, dtype=np.uint8)
         
-        noOfOnes = 0
+        num_ones = 0
 
         # convert k into bits
-        if need_unpack_bits:
+        if unpack:
             k_bits = np.unpackbits(np.array([k], dtype=np.uint8))
         else:
             k_bits = k
 
-        for i in range(m - 1):
+        for i in range(8):
             if i < r-1 and k_bits[i] == 1:
-                noOfOnes += 1
-                if noOfOnes % 2 == 0:
+                num_ones += 1
+                if num_ones % 2 == 0:
                     S[0, i] = 0
                 else:
                     S[0, i] = 1
             elif i >= r-1 and k_bits[i] == 1:
-                noOfOnes += 1
+                num_ones += 1
                 j = i + 1
-                if noOfOnes % 2 == 1:
+                if num_ones % 2 == 1:
                     S[0, j] = 1
                 else:
                     S[0, j] = 0
 
-        if noOfOnes % 2 == 1:
+        if num_ones % 2 == 1:
             S[0, r-1] = 0
 
         # Randomly assign the rest null elements in row 1
         # (To simplify the problem, we assign 1 to the null in row 1)
-        for i in range(m):
+        for i in range(9):
             if S[0,i] == 3:
                 S[0,i] = 1
 
         #Compute row 2
-
         j = -1
-        for i in range(m):
+        for i in range(9):
             if i != r-1:
                 j += 1
                 S[1,i] = S[0,i] ^ k_bits[j]
             else:
-                S[1,i] = S[0,i] ^ (noOfOnes % 2)
+                S[1,i] = S[0,i] ^ (num_ones % 2)
                 
         return S
 
-    def construct_S_mn(self, k, r, m, n):
+    def construct_S_n9(self, k, r, n):
         # r must be between 1 and m
-        assert 1 <= r <= m, "r must satisfy 1 <= r <= m"
+        assert 1 <= r <= 9, "r must satisfy 1 <= r <= 9"
         
-        S = np.zeros((n, m), dtype=np.uint8)
+        S = np.zeros((n, 9), dtype=np.uint8)
 
-        # Convert k into bits
         k_bits = np.unpackbits(np.array([k], dtype=np.uint8))
 
-        # Random assign n-2 rows with five 1s and four 0s
-        
-        # Randomly choose 2 non_assign rows
-        choose_none_assign_row = np.random.choice(n, 2, replace=False)
+        selected = np.random.choice(n, 2, replace=False)
         
         for i in range(n):
-            if i in choose_none_assign_row:
+            if i in selected:
                 continue
-            # Randomly choose m//2+1 indices to place 1s
-            ones_indices = np.random.choice(m, m // 2 + 1, replace=False)
+            ones_indices = np.random.choice(9, 5, replace=False)
             S[i, ones_indices] = 1
 
         # Compute t
-        t = np.zeros(m, dtype=np.uint8)
+        t = np.zeros(9, dtype=np.uint8)
 
-        for i in range(m):
+        for i in range(9):
             if i < r - 1:
                 t[i] = k_bits[i]
             elif i == r - 1:
@@ -280,138 +170,115 @@ class VisualCipher:
             else:
                 t[i] = k_bits[i - 1]
 
-        # Compute t0
-        t0 = np.bitwise_xor(t, np.sum(S, axis=0) % 2)
+        t_prime = np.bitwise_xor(t, np.sum(S, axis=0) % 2)
 
-        # Apply the uniform 2 out of 2 scheme to compute row S_none_assign1 and S_none_assign2
-        k0 = np.delete(t0, r - 1)
-        two_out_of_two = self.construct_S_2_out_of_2(k0, r, need_unpack_bits=False)
+        k_prime = np.delete(t_prime, r - 1)
+        S_left = self.construct_S_29(k_prime, r, unpack=False)
 
-
-        # check t equal S_1 xor S_2 xor S_3
-        S[choose_none_assign_row[0]] = two_out_of_two[0]
-        S[choose_none_assign_row[1]] = two_out_of_two[1]
+        S[selected[0]] = S_left[0]
+        S[selected[1]] = S_left[1]
 
         return S
     
-    def encrypt_mn(self, secret, covers, m, n, to_improve=True):
+    def encrypt_n9(self, secret, covers, improve=True):
         h, w, c = secret.shape
-        scale = int(m ** 0.5)
+        d = 3
+        n = len(covers)
 
-        # Length of covers must be n
-        assert len(covers) == n, "Length of covers must be n"
         # All cover images must share the same shape
         for cover in covers:
             assert cover.shape == secret.shape, "All cover images must share the same shape"
 
-
         # Make deep copies of covers to ensure original covers are not modified
-        covers_copy = [copy.deepcopy(cover) for cover in covers]
+        covers = [copy.deepcopy(cover) for cover in covers]
 
-        if to_improve:
+        if improve:
             # Add 1 to all cover images
-            for cover in covers_copy:
+            for cover in covers:
                 cover += 1
                 # If exceeding 255, set to 255
                 cover[cover > 255] = 255
         else:
             # Ensure distinct value separation for non-improved version
-            for cover in covers_copy:
+            for cover in covers:
                 cover[cover < 128] += 1
                 cover[cover >= 128] -= 1
 
         # Generate random numbers in shape of (h, w)
-        rs = np.random.randint(1, m + 1, (h, w))
+        rs = np.random.randint(1, 10, (h, w))
 
         # Camouflages
         camouflages = []
         for _ in range(n):
-            camouflages.append(np.zeros((h * scale, w * scale, c), dtype=np.uint8))
+            camouflages.append(np.zeros((h * d, w * d, c), dtype=np.uint8))
 
-        pbar = tqdm(total=h * w * c, desc="Encrypting")
+        pbar = tqdm(total=h * w * c * n, desc="Encrypting")
 
         for z in range(c):
             for i in range(h):
                 for j in range(w):
                     r = rs[i, j]
                     k = secret[i, j, z]
-                    S = self.construct_S_mn(k, r, m, n)
-                    for share_index in range(n):
-                        S_share = S[share_index].reshape(scale, scale)
-                        # Replace 1 in S_share with covers_copy[share_index][i, j, z] 
-                        # Replace 0 in S_share with covers_copy[share_index][i, j, z] - 1
-                        S_share[S_share == 1] = covers_copy[share_index][i, j, z]
-                        if to_improve:
-                            S_share[S_share == 0] = covers_copy[share_index][i, j, z] - 1
+                    S = self.construct_S_n9(k, r, n)
+                    for idx in range(n):
+                        S_share = S[idx].reshape(d, d)
+                        S_share[S_share == 1] = covers[idx][i, j, z]
+                        if improve:
+                            S_share[S_share == 0] = covers[idx][i, j, z] - 1
                         else:
                             S_share[S_share == 0] = 0
 
                         # Put S_share into camouflages
-                        camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z] = S_share
+                        camouflages[idx][i * d:(i + 1) * d, j * d:(j + 1) * d, z] = S_share
 
                         pbar.update(1)
 
         pbar.close()
 
         return camouflages, rs
+    
+    def reconstruct_S_n9(self, patches):
+        n = len(patches)
+        S = np.zeros((n, 9), dtype=np.int8)
 
-    def reconstruct_S_mn(self, r, Camouflages, scale, i, j, z, m, n):
-        
-        S = np.zeros((n, m), dtype=np.uint8)
+        patches = [patch.copy().flatten() for patch in patches]
 
-        
-        # replace the larger value in S with 1 and the smaller value with 0 in each row
-        for share_index in range(n):
-            patch = Camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z]
-            S_share = patch.copy().flatten()
-            one_value = max(S_share)
-            S_share = np.where(S_share == one_value, 1, 0)
-            S[share_index] = S_share
-
-        #print(S)
+        for i, patch in enumerate(patches):
+            one_value = max(patch)
+            patch = np.where(patch == one_value, 1, 0)
+            S[i] = patch
 
         return S
 
-    def recover_pixel_mn(self, S, r, m, n):
-        # r must between 1 and m
-        assert 1 <= r and r <= m, "r must satisfy 1 <= r <= m"
-
-        T = np.sum(S, axis=0) % 2
-
+    def recover_pixel_n9(self, S, r):
+        t = np.sum(S, axis=0) % 2
 
         k = 0
-        for j in range(m):
+        for j in range(9):
             if j == r-1:
                 continue
             elif j < r-1:
-                # t_i = k_i
-                k += T[j] * (2 ** (7-j))
-                #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j))
+                k += t[j] * (2 ** (7-j))
             elif j > r-1:
-                # t_i = k_i-1
-                k += T[j] * (2 ** (7-j+1))
-                #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
+                k += t[j] * (2 ** (7-j+1))
         return k
     
-    def decrypt_mn(self, camouflages, rs, m, n, to_improve=True):
-        scale = int(m ** 0.5)
+    def decrypt_mn(self, camouflages, rs):
+        d = 3
         h, w, c = camouflages[0].shape
+        n = len(camouflages)
         
-        # Initialize container for the decrypted secret image
-        secret = np.zeros((h // scale, w // scale, c), dtype=np.uint8)
+        secret = np.zeros((h // d, w // d, c), dtype=np.uint8)
 
-        pbar = tqdm(total=(h // scale) * (w // scale) * c, desc="Decrypting")
+        pbar = tqdm(total=(h // d) * (w // d) * c, desc="Decrypting")
 
         for z in range(c):
-            for i in range(h // scale):
-                for j in range(w // scale):
+            for i in range(h // d):
+                for j in range(w // d):
+                    patches = [camouflage[i * d:(i + 1) * d, j * d:(j + 1) * d, z] for camouflage in camouflages]
+                    S = self.reconstruct_S_n9(patches)
                     r = rs[i, j]
-                    #S = np.zeros((n, m), dtype=np.uint8)
-                    S = self.reconstruct_S_mn(r, camouflages, scale, i, j, z, m, n)
-
-                    
-                    # Recover original pixel value
-                    k = self.recover_pixel_mn(S, r, m, n)
+                    k = self.recover_pixel_n9(S, r)
                     secret[i, j, z] = k
                     pbar.update(1)
 
@@ -427,65 +294,52 @@ class VisualCipher:
 
         return 10 * np.log10(255**2 / mse)
     
-    def expand(self, img, m):
-        h, w, c = img.shape
-        scale = int(m ** 0.5)
-        expanded = np.zeros((h * scale, w * scale, c), dtype=np.uint8)
-
-        for z in range(c):
-            for i in range(h):
-                for j in range(w):
-                    pixel = img[i, j, z]
-                    expanded[i*scale:(i+1)*scale, j*scale:(j+1)*scale, z] = pixel
-        return expanded
-    
-    def ISNR(self, ori_covers, camouflages_chang, camouflages_improved, m, n):
-        for i in range(n):
-            expanded = self.expand(ori_covers[i], m)
-            isnr = 10 * np.log10(np.mean((camouflages_chang[i] - expanded) ** 2) / np.mean((camouflages_improved[i] - expanded ) ** 2))
-            print(f'ISNR camouflage{i}:{isnr}')
-    
 if __name__ == "__main__":
+    # ===== Prepare standard images =====
+    std_images = StandardImages()
+    secret = std_images.lenna
+    covers = [std_images.mandril, std_images.peppers, std_images.airplaneF16]
+
     vc = VisualCipher()
-    secret = vc.lena
-    covers = [vc.mandril, vc.peppers, vc.airplaneF16]
-    '''
-    camouflages, rs = vc.encrypt_29(secret, covers)
-
-    # save
-    cv2.imwrite("camouflage0.png", camouflages[0])
-    cv2.imwrite("camouflage1.png", camouflages[1])        
-    cv2.imwrite("rs.png", vc.r2img(rs))  
-
-    rs = vc.img2r(cv2.imread("rs.png", cv2.IMREAD_GRAYSCALE))
-    secret_recovered = vc.decrypt_29(camouflages, rs)
-
-    # save
-    cv2.imwrite("secret_recovered.png", secret_recovered)
-
-    secret = vc.cameraman
-    covers = [vc.house, vc.jetplane, vc.lake]
-    '''
-    m = 9
-    n = 3
-    camouflages_old, rs_old = vc.encrypt_mn(secret, covers, m, n, to_improve=False)
-    camouflages_improved, rs_improved = vc.encrypt_mn(secret, covers, m, n, to_improve=True)
-    # save
-    for i in range(n):
-        cv2.imwrite(f"camouflage{i}_old.png", camouflages_old[i])
-        cv2.imwrite(f"camouflage{i}_improved.png", camouflages_improved[i])
-
-    cv2.imwrite("rs_old.png", vc.r2img(rs_old))
-    cv2.imwrite("rs_improved.png", vc.r2img(rs_improved))
     
-    rs_old = vc.img2r(cv2.imread("rs_old.png", cv2.IMREAD_GRAYSCALE))
-    rs_improved = vc.img2r(cv2.imread("rs_improved.png", cv2.IMREAD_GRAYSCALE))
-
-    secret_recovered_old = vc.decrypt_mn(camouflages_old, rs_old, m, n, to_improve=False)
-    secret_recovered_improved = vc.decrypt_mn(camouflages_improved, rs_improved, m, n)
+    # ===== Encrypt =====
+    camouflages_ori, rs_ori = vc.encrypt_n9(secret, covers, improve=False)
+    camouflages, rs = vc.encrypt_n9(secret, covers, improve=True)
     # save
-    cv2.imwrite("secret_recovered_mn.png", secret_recovered_old)
-    cv2.imwrite("secret_recovered_mn_improved.png", secret_recovered_improved)
-    print(f'PSNR secret_recovered_mn:{vc.PSNR(secret, secret_recovered_old)}')
-    print(f'PSNR secret_recovered_mn_improved:{vc.PSNR(secret, secret_recovered_improved)}')
-    vc.ISNR(covers, camouflages_old, camouflages_improved, m, n)
+    for idx in range(len(camouflages)):
+        cv2.imwrite(f"camouflage_{idx}.png", camouflages[idx])
+        cv2.imwrite(f"camouflage_ori_{idx}.png", camouflages_ori[idx])
+    cv2.imwrite("rs.png", vc.r2img(rs))
+    cv2.imwrite("rs_ori.png", vc.r2img(rs_ori))
+
+
+    # ===== Decrypt =====
+    # read
+    camouflages = [cv2.imread(f"camouflage_{idx}.png") for idx in range(len(camouflages))]
+    camouflages_ori = [cv2.imread(f"camouflage_ori_{idx}.png") for idx in range(len(camouflages_ori))]
+    rs = vc.img2r(cv2.imread("rs.png", cv2.IMREAD_GRAYSCALE))
+    rs_ori = vc.img2r(cv2.imread("rs_ori.png", cv2.IMREAD_GRAYSCALE))
+
+    secret_rec = vc.decrypt_mn(camouflages, rs)
+    secret_ori_rec = vc.decrypt_mn(camouflages_ori, rs_ori)
+    # save
+    cv2.imwrite("secret_recovered.png", secret_rec)
+    cv2.imwrite("secret_recovered_ori.png", secret_ori_rec)
+
+    # ===== Evaluation =====
+    evaluator = Evaluator()
+
+    # 1. PSNR between secret_rec and secret & secret_ori_rec and secret
+    psnr = evaluator.PSNR(secret, secret_rec)
+    psnr_ori = evaluator.PSNR(secret, secret_ori_rec)
+    print(f"PSNR between secret_rec and secret: {psnr}")
+    print(f"PSNR between secret_ori_rec and secret: {psnr_ori}")
+
+    # 2. ISNR between covers and camouflages
+    isnr_exp = evaluator.ISNR(covers, camouflages_ori, camouflages, 3, method="expand")
+    isnr_mean = evaluator.ISNR(covers, camouflages_ori, camouflages, 3, method="mean")
+    isnr_median = evaluator.ISNR(covers, camouflages_ori, camouflages, 3, method="median")
+    print(f"ISNR between covers and camouflages (expand): {isnr_exp}")
+    print(f"ISNR between covers and camouflages (mean): {isnr_mean}")
+    print(f"ISNR between covers and camouflages (median): {isnr_median}")
+
