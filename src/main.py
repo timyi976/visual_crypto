@@ -286,14 +286,6 @@ class VisualCipher:
 
         return secret
     
-    # PSNR
-    def PSNR(self, img1, img2):
-        mse = np.mean((img1 - img2) ** 2)
-        if mse == 0:
-            return 100
-
-        return 10 * np.log10(255**2 / mse)
-    
 if __name__ == "__main__":
     # ===== Prepare standard images =====
     std_images = StandardImages()
