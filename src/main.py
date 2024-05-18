@@ -365,8 +365,7 @@ class VisualCipher:
             patch = Camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z]
             S_share = patch.copy().flatten()
             one_value = max(S_share)
-            S_share[S_share == one_value] = 1
-            S_share[S_share != 1] = 0
+            S_share = np.where(S_share == one_value, 1, 0)
             S[share_index] = S_share
 
         #print(S)
