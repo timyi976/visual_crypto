@@ -406,6 +406,14 @@ class VisualCipher:
 
         return secret
     
+    # PSNR
+    def PSNR(self, img1, img2):
+        mse = np.mean((img1 - img2) ** 2)
+        if mse == 0:
+            return 100
+
+        return 10 * np.log10(255**2 / mse)
+    
 if __name__ == "__main__":
     vc = VisualCipher()
     secret = vc.lena
@@ -442,3 +450,4 @@ if __name__ == "__main__":
     secret_recovered = vc.decrypt_mn(camouflages, rs, m, n)
     # save
     cv2.imwrite("secret_recovered_mn.png", secret_recovered)
+    print(f'PSNR secret_recovered_mn:{vc.PSNR(secret, secret_recovered)}')
