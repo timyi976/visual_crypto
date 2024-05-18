@@ -427,6 +427,24 @@ class VisualCipher:
 
         return 10 * np.log10(255**2 / mse)
     
+    def expand(self, img, m):
+        h, w, c = img.shape
+        scale = int(m ** 0.5)
+        expanded = np.zeros((h * scale, w * scale, c), dtype=np.uint8)
+
+        for z in range(c):
+            for i in range(h):
+                for j in range(w):
+                    pixel = img[i, j, z]
+                    expanded[i*scale:(i+1)*scale, j*scale:(j+1)*scale, z] = pixel
+        return expanded
+    
+    def ISNR(self, ori_covers, camouflages_chang, camouflages_improved, m, n):
+        for i in range(n):
+            expanded = self.expand(ori_covers[i], m)
+            isnr = 10 * np.log10(np.mean((camouflages_chang[i] - expanded) ** 2) / np.mean((camouflages_improved[i] - expanded ) ** 2))
+            print(f'ISNR camouflage{i}:{isnr}')
+    
 if __name__ == "__main__":
     vc = VisualCipher()
     secret = vc.lena
@@ -470,3 +488,4 @@ if __name__ == "__main__":
     cv2.imwrite("secret_recovered_mn_improved.png", secret_recovered_improved)
     print(f'PSNR secret_recovered_mn:{vc.PSNR(secret, secret_recovered_old)}')
     print(f'PSNR secret_recovered_mn_improved:{vc.PSNR(secret, secret_recovered_improved)}')
+    vc.ISNR(covers, camouflages_old, camouflages_improved, m, n)
