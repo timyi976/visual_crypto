@@ -304,11 +304,6 @@ class VisualCipher:
         for cover in covers:
             assert cover.shape == secret.shape, "All cover images must share the same shape"
 
-        # Add 1 to all cover images
-        for cover in covers:
-            cover += 1
-            # If exceeding 255, set to 255
-            cover[cover > 255] = 255
 
         # Make deep copies of covers to ensure original covers are not modified
         covers_copy = [copy.deepcopy(cover) for cover in covers]
