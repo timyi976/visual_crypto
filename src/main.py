@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import copy
 import random
 from tqdm import tqdm
 
@@ -293,7 +294,7 @@ class VisualCipher:
 
         return S
     
-    def encrypt_mn(self, secret, covers, m, n):
+    def encrypt_mn(self, secret, covers, m, n, to_improve=True):
         h, w, c = secret.shape
         scale = int(m ** 0.5)
 
@@ -309,6 +310,21 @@ class VisualCipher:
             # If exceeding 255, set to 255
             cover[cover > 255] = 255
 
+        # Make deep copies of covers to ensure original covers are not modified
+        covers_copy = [copy.deepcopy(cover) for cover in covers]
+
+        if to_improve:
+            # Add 1 to all cover images
+            for cover in covers_copy:
+                cover += 1
+                # If exceeding 255, set to 255
+                cover[cover > 255] = 255
+        else:
+            # Ensure distinct value separation for non-improved version
+            for cover in covers_copy:
+                cover[cover < 128] += 1
+                cover[cover >= 128] -= 1
+
         # Generate random numbers in shape of (h, w)
         rs = np.random.randint(1, m + 1, (h, w))
 
@@ -317,7 +333,7 @@ class VisualCipher:
         for _ in range(n):
             camouflages.append(np.zeros((h * scale, w * scale, c), dtype=np.uint8))
 
-        pbar = tqdm(total=h * w * c,  desc="Encrypting")
+        pbar = tqdm(total=h * w * c, desc="Encrypting")
 
         for z in range(c):
             for i in range(h):
@@ -327,10 +343,13 @@ class VisualCipher:
                     S = self.construct_S_mn(k, r, m, n)
                     for share_index in range(n):
                         S_share = S[share_index].reshape(scale, scale)
-                        # Replace 1 in S_share with covers[share_index][i, j, z] 
-                        # Replace 0 in S_share with covers[share_index][i, j, z] - 1
-                        S_share[S_share == 1] = covers[share_index][i, j, z]
-                        S_share[S_share == 0] = covers[share_index][i, j, z] - 1
+                        # Replace 1 in S_share with covers_copy[share_index][i, j, z] 
+                        # Replace 0 in S_share with covers_copy[share_index][i, j, z] - 1
+                        S_share[S_share == 1] = covers_copy[share_index][i, j, z]
+                        if to_improve:
+                            S_share[S_share == 0] = covers_copy[share_index][i, j, z] - 1
+                        else:
+                            S_share[S_share == 0] = 0
 
                         # Put S_share into camouflages
                         camouflages[share_index][i * scale:(i + 1) * scale, j * scale:(j + 1) * scale, z] = S_share
@@ -380,7 +399,7 @@ class VisualCipher:
                 #k += (S[0,j] ^ S[1,j]) * (2 ** (7-j+1))
         return k
     
-    def decrypt_mn(self, camouflages, rs, m, n):
+    def decrypt_mn(self, camouflages, rs, m, n, to_improve=True):
         scale = int(m ** 0.5)
         h, w, c = camouflages[0].shape
         
@@ -437,17 +456,23 @@ if __name__ == "__main__":
     '''
     m = 9
     n = 3
-    camouflages, rs = vc.encrypt_mn(secret, covers, m, n)
-
+    camouflages_old, rs_old = vc.encrypt_mn(secret, covers, m, n, to_improve=False)
+    camouflages_improved, rs_improved = vc.encrypt_mn(secret, covers, m, n, to_improve=True)
     # save
     for i in range(n):
-        cv2.imwrite(f"camouflage{i}.png", camouflages[i])
+        cv2.imwrite(f"camouflage{i}_old.png", camouflages_old[i])
+        cv2.imwrite(f"camouflage{i}_improved.png", camouflages_improved[i])
 
-    cv2.imwrite("rs.png", vc.r2img(rs))  
+    cv2.imwrite("rs_old.png", vc.r2img(rs_old))
+    cv2.imwrite("rs_improved.png", vc.r2img(rs_improved))
     
-    rs = vc.img2r(cv2.imread("rs.png", cv2.IMREAD_GRAYSCALE))
+    rs_old = vc.img2r(cv2.imread("rs_old.png", cv2.IMREAD_GRAYSCALE))
+    rs_improved = vc.img2r(cv2.imread("rs_improved.png", cv2.IMREAD_GRAYSCALE))
 
-    secret_recovered = vc.decrypt_mn(camouflages, rs, m, n)
+    secret_recovered_old = vc.decrypt_mn(camouflages_old, rs_old, m, n, to_improve=False)
+    secret_recovered_improved = vc.decrypt_mn(camouflages_improved, rs_improved, m, n)
     # save
-    cv2.imwrite("secret_recovered_mn.png", secret_recovered)
-    print(f'PSNR secret_recovered_mn:{vc.PSNR(secret, secret_recovered)}')
+    cv2.imwrite("secret_recovered_mn.png", secret_recovered_old)
+    cv2.imwrite("secret_recovered_mn_improved.png", secret_recovered_improved)
+    print(f'PSNR secret_recovered_mn:{vc.PSNR(secret, secret_recovered_old)}')
+    print(f'PSNR secret_recovered_mn_improved:{vc.PSNR(secret, secret_recovered_improved)}')
