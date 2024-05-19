@@ -110,8 +110,8 @@ class VisualCipher:
         return k_bits
     
     def uninterfold_k(self, k_bits, r):
-        k1_bits = np.concatenate((k_bits[:r], k_bits[2*r:2*r+r]))
-        k2_bits = np.concatenate((k_bits[r:2*r], k_bits[2*r+r:]))
+        k1_bits = np.concatenate((k_bits[:r], k_bits[2*r:2*r+(8-r)]))
+        k2_bits = np.concatenate((k_bits[r:2*r], k_bits[2*r+(8-r):]))
 
         k1 = np.packbits(k1_bits)[0]
         k2 = np.packbits(k2_bits)[0]
@@ -121,7 +121,6 @@ class VisualCipher:
     def construct_S_216(self, k1, k2, r, unpack=True):
         # r must between 1 and 8
         assert 1 <= r <= 8, "r must satisfy 1 <= r <= 8"
-        # r = r - 1
 
         S = np.full((2, 16), 3, dtype=np.uint8)
 
@@ -152,8 +151,6 @@ class VisualCipher:
         assert 1 <= r <= 8, "r must satisfy 1 <= r <= 8"
 
         S = np.zeros((n, 16), dtype=np.uint8)
-
-        # k_bits = self.interfold_k(k1, k2, r, unpack=True)
 
         selected = np.random.choice(n, 2, replace=False)
 
