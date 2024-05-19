@@ -263,7 +263,7 @@ class VisualCipher:
                 k += t[j] * (2 ** (7-j+1))
         return k
     
-    def decrypt_mn(self, camouflages, rs):
+    def decrypt_n9(self, camouflages, rs):
         d = 3
         h, w, c = camouflages[0].shape
         n = len(camouflages)
@@ -312,8 +312,8 @@ if __name__ == "__main__":
     rs = vc.img2r(cv2.imread("rs.png", cv2.IMREAD_GRAYSCALE))
     rs_ori = vc.img2r(cv2.imread("rs_ori.png", cv2.IMREAD_GRAYSCALE))
 
-    secret_rec = vc.decrypt_mn(camouflages, rs)
-    secret_ori_rec = vc.decrypt_mn(camouflages_ori, rs_ori)
+    secret_rec = vc.decrypt_n9(camouflages, rs)
+    secret_ori_rec = vc.decrypt_n9(camouflages_ori, rs_ori)
     # save
     cv2.imwrite("secret_recovered.png", secret_rec)
     cv2.imwrite("secret_recovered_ori.png", secret_ori_rec)
