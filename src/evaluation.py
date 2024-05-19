@@ -1,7 +1,13 @@
 import numpy as np
 
 class Evaluator:
-    def PSNR(self, img1, img2):
+    def PSNR(self, img1, img2, d=None, method=None):
+        
+        if method == "expand":
+            img1 = self._expand(img1, d)
+        elif method in ["mean", "median"]:
+            img1 = self._shrink(img1, d, method=method)
+        
         mse = np.mean((img1 - img2) ** 2)
         if mse == 0:
             return 100

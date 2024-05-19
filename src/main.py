@@ -235,7 +235,7 @@ if __name__ == "__main__":
     covers = [std_images.mandril, std_images.peppers, std_images.airplaneF16]
 
     vc = VisualCipher()
-    
+    evaluator = Evaluator()
     # ===== Encrypt =====
     camouflages_ori, rs_ori = vc.encrypt_n9(secret, covers, improve=False)
     camouflages, rs = vc.encrypt_n9(secret, covers, improve=True)
@@ -243,6 +243,11 @@ if __name__ == "__main__":
     for idx in range(len(camouflages)):
         cv2.imwrite(f"camouflage_{idx}.png", camouflages[idx])
         cv2.imwrite(f"camouflage_ori_{idx}.png", camouflages_ori[idx])
+        psnr_ori = evaluator.PSNR(covers[idx], camouflages_ori[idx], 3, method="expand")
+        psnr = evaluator.PSNR(covers[idx], camouflages[idx], 3, method="expand")
+        print(f"PSNR between cover and camouflage_{idx}(original): {psnr_ori}")
+        print(f"PSNR between cover and camouflage_{idx}(improved): {psnr}")
+
     cv2.imwrite("rs.png", vc.r2img(rs))
     cv2.imwrite("rs_ori.png", vc.r2img(rs_ori))
 
@@ -261,7 +266,6 @@ if __name__ == "__main__":
     cv2.imwrite("secret_recovered_ori.png", secret_ori_rec)
 
     # ===== Evaluation =====
-    evaluator = Evaluator()
 
     # 1. PSNR between secret_rec and secret & secret_ori_rec and secret
     psnr = evaluator.PSNR(secret, secret_rec)
