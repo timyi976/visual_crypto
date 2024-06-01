@@ -4,6 +4,12 @@ Visual Cryptography, Final Project for Digital Image Processing Course of NTU CS
 
 ## Usage
 
+- If is grayscale image, the number of secret images can only be between 1 and 6 inclusively.
+- If is color image, the number of secret images can only be either 1 or 2.
+- The number of cover images must be at least 2.
+- All secret images and cover images must have same shape.
+- You must specify the number of secret images during decryption using `--nsecrets` argument.
+
 ```
 usage: python3 vc_main.py [-h] [--encrypt] [--decrypt] [--gray] [--secrets SECRETS [SECRETS ...]] [--nsecrets NSECRETS] [--covers COVERS [COVERS ...]] [--output OUTPUT] [--r R]
                   [--seed SEED]
@@ -12,17 +18,17 @@ Encrypt and decrypt of visual cryptography scheme
 
 options:
   -h, --help            show this help message and exit
-  --encrypt             Encrypt mode
-  --decrypt             Decrypt mode
-  --gray                Use grayscale secret images
+  --encrypt             Encrypt mode (default: False)
+  --decrypt             Decrypt mode (default: False)
+  --gray                Use grayscale secret images (default: False)
   --secrets SECRETS [SECRETS ...]
-                        Paths of secret images
-  --nsecrets NSECRETS   Number of secret images, for decryption
+                        Paths of secret images (default: None)
+  --nsecrets NSECRETS   Number of secret images, for decryption (default: None)
   --covers COVERS [COVERS ...]
-                        Paths of cover images for encryption, or paths of camouflage images for decryption
-  --output OUTPUT       Output directory
-  --r R                 Path of the random number r image
-  --seed SEED           Seed for random number generation
+                        Paths of cover images for encryption, or paths of camouflage images for decryption (default: None)
+  --output OUTPUT       Output directory (default: ./output/)
+  --r R                 Path of the random number r image (default: None)
+  --seed SEED           Seed for random number generation (default: None)
 ```
 
 ## Usage Examples

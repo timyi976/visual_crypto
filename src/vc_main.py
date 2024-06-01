@@ -17,8 +17,14 @@ def write_image(image, path):
 def white_image(h, w, c):
     return 255 * np.ones((h, w, c), dtype=np.uint8)
 
+def random_image(h, w, c):
+    if c == 1:
+        return np.random.randint(0, 256, (h, w), dtype=np.uint8)
+    else:
+        return np.random.randint(0, 256, (h, w, c), dtype=np.uint8)
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="Encrypt and decrypt of visual cryptography scheme")
+    parser = argparse.ArgumentParser(description="Encrypt and decrypt of visual cryptography scheme", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--encrypt", action="store_true", help="Encrypt mode")
     parser.add_argument("--decrypt", action="store_true", help="Decrypt mode")
     parser.add_argument("--gray", action="store_true", help="Use grayscale secret images")
@@ -73,8 +79,8 @@ def parse_args():
         parser.error("Cannot have more than 6 grayscale secret images")
 
     # if the number of grayscale images is not the multiple of 3, warn users taht we'll add white images to make it a multiple of 3
-    if args.encrypt and args.gray and len(args.secrets) % 3 != 0:
-        print("Warning: The number of grayscale images is not the multiple of 3. White images will be added to make it a multiple of 3")
+    # if args.encrypt and args.gray and len(args.secrets) % 3 != 0:
+    #     print("Warning: The number of grayscale images is not the multiple of 3. Random noise images will be added to make it a multiple of 3 for encryption.\nWhen decrypting, remember to set the number of secret images same as current number of secret images, otherwise, there will be extra noise images in the output.")
 
     # if is decrypting, the number of secrets must be <= 2 if color, or <= 6 if grayscale
     if args.decrypt and not args.gray and args.nsecrets > 2:
@@ -92,15 +98,24 @@ def main():
 
     covers = [read_image(cover) for cover in args.covers]
 
+    # check if all covers have the same shape
+    h, w, c = covers[0].shape
+    for cover in covers:
+        assert cover.shape[0] == h and cover.shape[1] == w, "Error: All covers must have the same shape"
+
     if mode == "encrypt":
         secrets = args.secrets
         n_secrets = len(secrets)
         secrets = [read_image(secret, color=(not is_gray)) for secret in args.secrets]
 
+        # check if all secret images have the same shape
+        for secret in secrets:
+            assert secret.shape[0] == h and secret.shape[1] == w, "Error: All secret and cover images must have the same shape"
+
     if mode == "encrypt" and is_gray and n_secrets % 3 != 0:
         n_white = 3 - n_secrets % 3
         for _ in range(n_white):
-            secrets.append(white_image(secrets[0].shape[0], secrets[0].shape[1], 1))
+            secrets.append(random_image(secrets[0].shape[0], secrets[0].shape[1], 1))
 
     if mode == "encrypt" and is_gray:
         real_secrets = []
@@ -134,13 +149,13 @@ def main():
                 vc = VisualCipher9()
                 rs = vc.img2r(read_image(args.r, color=False))
                 secret = vc.decrypt_n9(covers, rs)
-                write_image(secret, f"{args.output}secret_recovered.png")
+                write_image(secret, f"{args.output}secret_0_recovered.png")
             elif n_secrets == 2:
                 vc = VisualCipher16()
                 rs = vc.img2r(read_image(args.r, color=False))
                 secret1, secret2 = vc.decrypt_n16(covers, rs)
-                write_image(secret1, f"{args.output}secret1_recovered.png")
-                write_image(secret2, f"{args.output}secret2_recovered.png")
+                write_image(secret1, f"{args.output}secret_0_recovered.png")
+                write_image(secret2, f"{args.output}secret_1_recovered.png")
 
         else:
             if n_secrets <= 3:
@@ -149,7 +164,7 @@ def main():
                 secret = vc.decrypt_n9(covers, rs)
                 for i in range(n_secrets):
                     secret_gray = secret[:, :, i]
-                    write_image(secret_gray, f"{args.output}secret{i}_recovered.png")
+                    write_image(secret_gray, f"{args.output}secret_{i}_recovered.png")
 
             elif n_secrets <= 6:
                 vc = VisualCipher16()
@@ -159,7 +174,7 @@ def main():
                 secrets_gray += [secret2[:, :, i] for i in range(n_secrets - 3)]
 
                 for i, secret_gray in enumerate(secrets_gray):
-                    write_image(secret_gray, f"{args.output}secret{i}_recovered.png")
+                    write_image(secret_gray, f"{args.output}secret_{i}_recovered.png")
 
 
 if __name__ == "__main__":
