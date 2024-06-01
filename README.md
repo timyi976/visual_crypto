@@ -32,20 +32,28 @@ options:
 ```
 
 ## Usage Examples
-
-- Hide 2 color secret images into 4 cover images
-
+- Method1 - Hide 1 color secret images into 2 cover images
 	```bash
 	# run under src/
-	
+
 	# encryption
-	python3 vc_main.py --encrypt --secrets ../standard_images/color/lenna_color_512.tif ../standard_images/color/barbara.tif --covers ../standard_images/color/lake_color.tif ../standard_images/color/lighthouse.tif ../standard_images/color/peppers_color.tif ../standard_images/color/mandril_color.tif --seed 4096
+	python3 vc_main.py --encrypt --secrets ../standard_images/color/lenna_color_512.tif --covers ../standard_images/color/mandril_color.tif ../standard_images/color/peppers_color.tif
 
 	# decryption
-	python3 vc_main.py --decrypt --covers ./output/camouflage_0.png ./output/camouflage_1.png ./output/camouflage_2.png ./output/camouflage_3.png --nsecrets 2 --r ./output/rs.png
+	python3 vc_main.py --decrypt --covers ./output/camouflage_0.png ./output/camouflage_1.png --nsecrets 1 --r ./output/rs.png
 	```
 
-- Hide 3 grayscale secret images into 3 cover images
+- Method2 - Hide 1 color secret images into 3 cover images
+	```bash
+	# run under src/
+
+	# encryption
+	python3 vc_main.py --encrypt --secrets ../standard_images/color/lenna_color_512.tif --covers ../standard_images/color/mandril_color.tif ../standard_images/color/peppers_color.tif ../standard_images/color/airplaneF16.tif
+
+	# decryption
+	python3 vc_main.py --decrypt --covers ./output/camouflage_0.png ./output/camouflage_1.png ./output/camouflage_2.png --nsecrets 1 --r ./output/rs.png
+	```
+- Method3 - Hide 3 grayscale secret images into 3 cover images
 
 	```bash
 	# run under src/
@@ -55,6 +63,18 @@ options:
 
 	# decryption
 	python3 vc_main.py --decrypt --gray --covers ./output/camouflage_0.png ./output/camouflage_1.png ./output/camouflage_2.png --nsecrets 3 --r ./output/rs.png
+	```
+
+- Method4 - Hide 2 color secret images into 4 cover images
+
+	```bash
+	# run under src/
+	
+	# encryption
+	python3 vc_main.py --encrypt --secrets ../standard_images/color/lenna_color_512.tif ../standard_images/color/barbara.tif --covers ../standard_images/color/lake_color.tif ../standard_images/color/lighthouse.tif ../standard_images/color/peppers_color.tif ../standard_images/color/mandril_color.tif --seed 4096
+
+	# decryption
+	python3 vc_main.py --decrypt --covers ./output/camouflage_0.png ./output/camouflage_1.png ./output/camouflage_2.png ./output/camouflage_3.png --nsecrets 2 --r ./output/rs.png
 	```
 
 ## Reference
