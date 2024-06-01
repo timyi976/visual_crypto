@@ -37,7 +37,6 @@ options:
 
 	```bash
 	# run under src/
-	# make sure src/output/ exists
 	
 	# encryption
 	python3 vc_main.py --encrypt --secrets ../standard_images/color/lenna_color_512.tif ../standard_images/color/barbara.tif --covers ../standard_images/color/lake_color.tif ../standard_images/color/lighthouse.tif ../standard_images/color/peppers_color.tif ../standard_images/color/mandril_color.tif --seed 4096
@@ -50,7 +49,6 @@ options:
 
 	```bash
 	# run under src/
-	# make sure src/output/ exists
 	
 	# encryption
 	python3 vc_main.py --encrypt --gray --secrets ../standard_images/gray/cameraman.tif ../standard_images/gray/house.tif ../standard_images/gray/jetplane.tif --covers ../standard_images/color/barbara.tif ../standard_images/color/lake_color.tif ../standard_images/color/lenna_color_512.tif

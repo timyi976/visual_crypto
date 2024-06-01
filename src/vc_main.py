@@ -4,6 +4,7 @@ from vc_16 import VisualCipher as VisualCipher16
 import cv2
 import numpy as np
 import random
+import os
 
 def read_image(path, color=True):
     if color:
@@ -90,9 +91,15 @@ def parse_args():
 
     return args
 
+def create_output_dir(output_dir):
+    # Ensure the output directory exists
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
 def main():
     args = parse_args()
 
+    create_output_dir(args.output)
     mode = "encrypt" if args.encrypt else "decrypt"
     is_gray = args.gray
 
